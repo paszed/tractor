@@ -1,20 +1,20 @@
-# Tractor
+# 🚜 Tractor
 
 Tractor is a simple CLI tool to extract structured data from websites.
 
-## Idea
+## 💡 Idea
 
 Turn messy web pages into clean datasets.
 
 URL → extract items → map fields → output JSON / CSV
 
-## Status
+## 🚧 Status
 
 Early development.
 
 This repo is just initialized. Nothing is implemented yet.
 
-## Direction
+## 🧭 Direction
 
 Tractor focuses on quick, real-world scraping tasks:
 
@@ -25,20 +25,20 @@ Tractor focuses on quick, real-world scraping tasks:
 
 No crawling. No browser automation. No framework.
 
-## Philosophy
+## ⚙️ Philosophy
 
 - Simple > complete
 - Fast > perfect
 - CLI-first
 - Do one thing well
 
-## Usage (planned)
+## 🧪 Usage (planned)
 
 tractor <url> --selector ".item"
 
 tractor scrape config.json
 
-## Scope
+## 🚫 Scope
 
 Not included:
 
@@ -47,7 +47,7 @@ Not included:
 - complex pagination
 - dashboards / UI
 
-## Why
+## 🎯 Why
 
 Existing tools are either too heavy or too low-level.
 
@@ -55,6 +55,6 @@ Tractor aims to be the fastest way to go from:
 
 website → usable data
 
-## License
+## 📄 License
 
 MIT

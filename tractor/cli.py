@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from tractor.fetch import fetch_html
 from tractor.extract import extract, extract_fields
@@ -13,7 +14,7 @@ def run():
 
     # --- scrape command (config mode) ---
     scrape_parser = subparsers.add_parser("scrape")
-    scrape_parser.add_argument("config", help="Path to config file")
+    scrape_parser.add_argument("config", help="Path to config file or folder")
 
     # --- default CLI args ---
     parser.add_argument("url", nargs="?", help="URL to scrape")
@@ -33,10 +34,41 @@ def run():
 
     args = parser.parse_args()
 
-    # --- CONFIG MODE ---
+    # =========================
+    # CONFIG MODE (scrape)
+    # =========================
     if args.command == "scrape":
-        config = load_config(args.config)
+        path = args.config
 
+        # --- folder mode ---
+        if os.path.isdir(path):
+            files = [f for f in os.listdir(path) if f.endswith(".json")]
+
+            for file in files:
+                config_path = os.path.join(path, file)
+                print(f"→ Running {file}")
+
+                config = load_config(config_path)
+                html = fetch_html(config["url"])
+
+                if "item" in config and "fields" in config:
+                    field_defs = [
+                        f"{k}={v}" for k, v in config["fields"].items()
+                    ]
+                    data = extract_fields(html, config["item"], field_defs)
+                else:
+                    data = extract(
+                        html,
+                        config["selector"],
+                        config.get("attr", "text")
+                    )
+
+                output(data, args.format, None)
+
+            return
+
+        # --- single file mode ---
+        config = load_config(path)
         html = fetch_html(config["url"])
 
         if "item" in config and "fields" in config:
@@ -54,7 +86,9 @@ def run():
         output(data, args.format, args.output)
         return
 
-    # --- CLI MODE ---
+    # =========================
+    # CLI MODE (manual args)
+    # =========================
     if not args.item and not args.selector:
         parser.error("provide either --selector OR --item with --field")
 

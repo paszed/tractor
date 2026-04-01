@@ -23,6 +23,7 @@ def run():
     )
 
     # output
+    parser.add_argument("--output", help="Output file")
     parser.add_argument("--format", default="text", choices=["text", "json"])
 
     args = parser.parse_args()
@@ -39,4 +40,4 @@ def run():
     else:
         data = extract(html, args.selector, args.attr)
 
-    output(data, args.format)
+    output(data, args.format, args.output)

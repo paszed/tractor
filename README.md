@@ -12,7 +12,11 @@ URL → extract items → map fields → output JSON / CSV
 
 Early development.
 
-This repo is just initialized. Nothing is implemented yet.
+Current features:
+- fetch HTML from URL
+- extract data via CSS selectors
+
+More coming.
 
 ## 🧭 Direction
 

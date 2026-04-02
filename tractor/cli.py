@@ -12,30 +12,36 @@ def run():
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # --- scrape command (config mode) ---
+    # =========================
+    # SCRAPE (config mode)
+    # =========================
     scrape_parser = subparsers.add_parser("scrape")
     scrape_parser.add_argument("config", help="Path to config file or folder")
 
-    # --- default CLI args ---
-    parser.add_argument("url", nargs="?", help="URL to scrape")
+    # =========================
+    # EXTRACT (manual mode)
+    # =========================
+    extract_parser = subparsers.add_parser("extract")
 
-    parser.add_argument("--selector", help="CSS selector")
-    parser.add_argument("--attr", default="text", help="Attribute to extract")
+    extract_parser.add_argument("url", help="URL to scrape")
 
-    parser.add_argument("--item", help="Selector for repeating items")
-    parser.add_argument(
+    extract_parser.add_argument("--selector", help="CSS selector")
+    extract_parser.add_argument("--attr", default="text", help="Attribute to extract")
+
+    extract_parser.add_argument("--item", help="Selector for repeating items")
+    extract_parser.add_argument(
         "--field",
         action="append",
-        help='Field mapping: name=selector or name=selector@attr'
+        help="Field mapping: name=selector or name=selector@attr"
     )
 
-    parser.add_argument("--format", default="text", choices=["text", "json", "csv"])
-    parser.add_argument("--output", help="Output file")
+    extract_parser.add_argument("--format", default="text", choices=["text", "json", "csv"])
+    extract_parser.add_argument("--output", help="Output file")
 
     args = parser.parse_args()
 
     # =========================
-    # CONFIG MODE (scrape)
+    # SCRAPE MODE
     # =========================
     if args.command == "scrape":
         path = args.config
@@ -45,10 +51,11 @@ def run():
             files = [f for f in os.listdir(path) if f.endswith(".json")]
 
             for file in files:
-                config_path = os.path.join(path, file)
                 print(f"→ Running {file}")
 
+                config_path = os.path.join(path, file)
                 config = load_config(config_path)
+
                 html = fetch_html(config["url"])
 
                 if "item" in config and "fields" in config:
@@ -64,8 +71,9 @@ def run():
                     )
 
                 name = config.get("name", file.replace(".json", ""))
-                output_file = os.path.join("outputs", f"{name}.{args.format}")
-                output(data, args.format, output_file)
+                output_file = os.path.join("outputs", f"{name}.json")
+
+                output(data, "json", output_file)
 
             return
 
@@ -85,21 +93,28 @@ def run():
                 config.get("attr", "text")
             )
 
+        name = config.get("name", "output")
+        output_file = os.path.join("outputs", f"{name}.json")
+
+        output(data, "json", output_file)
+
+    # =========================
+    # EXTRACT MODE
+    # =========================
+    elif args.command == "extract":
+        if not args.item and not args.selector:
+            parser.error("provide either --selector OR --item with --field")
+
+        html = fetch_html(args.url)
+
+        if args.item and args.field:
+            data = extract_fields(html, args.item, args.field)
+        else:
+            data = extract(html, args.selector, args.attr)
+
         output(data, args.format, args.output)
-        return
 
-    # =========================
-    # CLI MODE (manual args)
-    # =========================
-    if not args.item and not args.selector:
-        parser.error("provide either --selector OR --item with --field")
-
-    html = fetch_html(args.url)
-
-    if args.item and args.field:
-        data = extract_fields(html, args.item, args.field)
     else:
-        data = extract(html, args.selector, args.attr)
+        parser.print_help()
 
-    output(data, args.format, args.output)
 

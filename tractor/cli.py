@@ -7,6 +7,8 @@ from tractor.extract import extract, extract_fields
 from tractor.output import output
 from tractor.config import load_config
 from tractor.generate import generate_config
+from tractor.interactive import interactive_mode
+
 
 
 def run():
@@ -48,7 +50,6 @@ def run():
     generate_parser.add_argument("--save", help="Save config to file")
 
     # =========================
-
     # PREVIEW (test selectors)
     # =========================
     preview_parser = subparsers.add_parser("preview")
@@ -63,6 +64,13 @@ def run():
         action="append",
         help="Field mapping"
     )
+
+    # =========================
+    # INTERACTIVE (selector picker)
+    # =========================
+    interactive_parser = subparsers.add_parser("interactive")
+    interactive_parser.add_argument("url", help="URL to inspect")
+
 
     args = parser.parse_args()
 
@@ -170,6 +178,13 @@ def run():
         preview = data[:5] if isinstance(data, list) else data
 
         print(json.dumps(preview, indent=2))
+
+    # =========================
+    # INTERACTIVE MODE
+    # =========================
+    elif args.command == "interactive":
+        html = fetch_html(args.url)
+        interactive_mode(args.url, html)
 
     else:
         parser.print_help()

@@ -63,7 +63,8 @@ def run():
                         config.get("attr", "text")
                     )
 
-                output_file = os.path.join("outputs", file.replace(".json", f".{args.format}"))
+                name = config.get("name", file.replace(".json", ""))
+                output_file = os.path.join("outputs", f"{name}.{args.format}")
                 output(data, args.format, output_file)
 
             return

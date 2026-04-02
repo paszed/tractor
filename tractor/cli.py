@@ -1,10 +1,12 @@
 import argparse
 import os
+import json
 
 from tractor.fetch import fetch_html
 from tractor.extract import extract, extract_fields
 from tractor.output import output
 from tractor.config import load_config
+from tractor.generate import generate_config
 
 
 def run():
@@ -38,6 +40,12 @@ def run():
     extract_parser.add_argument("--format", default="text", choices=["text", "json", "csv"])
     extract_parser.add_argument("--output", help="Output file")
 
+    # =========================
+    # GENERATE (auto config)
+    # =========================
+    generate_parser = subparsers.add_parser("generate")
+    generate_parser.add_argument("url", help="URL to analyze")
+
     args = parser.parse_args()
 
     # =========================
@@ -46,7 +54,6 @@ def run():
     if args.command == "scrape":
         path = args.config
 
-        # --- folder mode ---
         if os.path.isdir(path):
             files = [f for f in os.listdir(path) if f.endswith(".json")]
 
@@ -59,9 +66,7 @@ def run():
                 html = fetch_html(config["url"])
 
                 if "item" in config and "fields" in config:
-                    field_defs = [
-                        f"{k}={v}" for k, v in config["fields"].items()
-                    ]
+                    field_defs = [f"{k}={v}" for k, v in config["fields"].items()]
                     data = extract_fields(html, config["item"], field_defs)
                 else:
                     data = extract(
@@ -77,14 +82,13 @@ def run():
 
             return
 
-        # --- single file mode ---
+        # single config
+
         config = load_config(path)
         html = fetch_html(config["url"])
 
         if "item" in config and "fields" in config:
-            field_defs = [
-                f"{k}={v}" for k, v in config["fields"].items()
-            ]
+            field_defs = [f"{k}={v}" for k, v in config["fields"].items()]
             data = extract_fields(html, config["item"], field_defs)
         else:
             data = extract(
@@ -114,7 +118,15 @@ def run():
 
         output(data, args.format, args.output)
 
+    # =========================
+    # GENERATE MODE
+    # =========================
+    elif args.command == "generate":
+        html = fetch_html(args.url)
+        config = generate_config(args.url, html)
+
+        print(json.dumps(config, indent=2))
+
     else:
         parser.print_help()
-
 

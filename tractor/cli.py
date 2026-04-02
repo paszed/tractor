@@ -29,7 +29,7 @@ def run():
         help='Field mapping: name=selector or name=selector@attr'
     )
 
-    parser.add_argument("--format", default="text", choices=["text", "json"])
+    parser.add_argument("--format", default="text", choices=["text", "json", "csv"])
     parser.add_argument("--output", help="Output file")
 
     args = parser.parse_args()

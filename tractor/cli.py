@@ -45,8 +45,10 @@ def run():
     # =========================
     generate_parser = subparsers.add_parser("generate")
     generate_parser.add_argument("url", help="URL to analyze")
+    generate_parser.add_argument("--save", help="Save config to file")
 
     # =========================
+
     # PREVIEW (test selectors)
     # =========================
     preview_parser = subparsers.add_parser("preview")
@@ -140,7 +142,17 @@ def run():
         html = fetch_html(args.url)
         config = generate_config(args.url, html)
 
-        print(json.dumps(config, indent=2))
+        if args.save:
+            dir_path = os.path.dirname(args.save)
+            if dir_path:
+                os.makedirs(dir_path, exist_ok=True)
+
+            with open(args.save, "w") as f:
+                json.dump(config, f, indent=2)
+
+            print(f"✓ saved to {args.save}")
+        else:
+            print(json.dumps(config, indent=2))
 
     # =========================
     # PREVIEW MODE

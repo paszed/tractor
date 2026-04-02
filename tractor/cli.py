@@ -46,6 +46,22 @@ def run():
     generate_parser = subparsers.add_parser("generate")
     generate_parser.add_argument("url", help="URL to analyze")
 
+    # =========================
+    # PREVIEW (test selectors)
+    # =========================
+    preview_parser = subparsers.add_parser("preview")
+
+    preview_parser.add_argument("url", help="URL to preview")
+    preview_parser.add_argument("--selector", help="CSS selector")
+    preview_parser.add_argument("--attr", default="text")
+
+    preview_parser.add_argument("--item", help="Selector for repeating items")
+    preview_parser.add_argument(
+        "--field",
+        action="append",
+        help="Field mapping"
+    )
+
     args = parser.parse_args()
 
     # =========================
@@ -83,7 +99,6 @@ def run():
             return
 
         # single config
-
         config = load_config(path)
         html = fetch_html(config["url"])
 
@@ -127,6 +142,22 @@ def run():
 
         print(json.dumps(config, indent=2))
 
+    # =========================
+    # PREVIEW MODE
+    # =========================
+    elif args.command == "preview":
+        html = fetch_html(args.url)
+
+        if args.item and args.field:
+            data = extract_fields(html, args.item, args.field)
+        else:
+            if not args.selector:
+                parser.error("provide --selector or --item")
+            data = extract(html, args.selector, args.attr)
+
+        preview = data[:5] if isinstance(data, list) else data
+
+        print(json.dumps(preview, indent=2))
+
     else:
         parser.print_help()
-

@@ -2,21 +2,36 @@ from bs4 import BeautifulSoup
 
 
 def get_selector(el):
-    """Generate simple CSS selector"""
-    if el.get("id"):
-        return f"#{el.get('id')}"
+    parts = []
+    current = el
 
-    if el.get("class"):
-        return f"{el.name}.{el.get('class')[0]}"
+    while current and current.name != "html":
+        part = current.name
 
-    return el.name
+        # prefer class
+        if current.get("class"):
+            part += "." + ".".join(current.get("class")[:2])
+
+        # fallback to id
+        elif current.get("id"):
+            part += f"#{current.get('id')}"
+
+        parts.insert(0, part)
+
+        # stop early if meaningful anchor found
+        if current.get("class") or current.get("id"):
+            break
+
+        current = current.parent
+
+    return " ".join(parts)
 
 
 def interactive_mode(url, html):
     soup = BeautifulSoup(html, "html.parser")
 
-    # pick interesting elements
-    elements = soup.select("h1, h2, h3, a, li, article")[:20]
+    # focus on meaningful content areas first
+    elements = soup.select("article h3, article a, article p, h1, h2")[:20]
 
     if not elements:
         print("No elements found")
@@ -32,7 +47,7 @@ def interactive_mode(url, html):
 
     try:
         el = elements[int(choice)]
-    except:
+    except (ValueError, IndexError):
         print("Invalid choice")
         return
 
@@ -40,3 +55,4 @@ def interactive_mode(url, html):
 
     print("\nSuggested selector:")
     print(selector)
+

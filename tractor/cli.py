@@ -8,7 +8,7 @@ from tractor.output import output
 from tractor.config import load_config
 from tractor.generate import generate_config
 from tractor.interactive import interactive_mode
-
+from tractor.pipeline import run_pipeline
 
 
 def run():
@@ -16,15 +16,15 @@ def run():
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # =========================
+    # ============================
     # SCRAPE (config mode)
-    # =========================
+    # ============================
     scrape_parser = subparsers.add_parser("scrape")
     scrape_parser.add_argument("config", help="Path to config file or folder")
 
-    # =========================
+    # ============================
     # EXTRACT (manual mode)
-    # =========================
+    # ============================
     extract_parser = subparsers.add_parser("extract")
 
     extract_parser.add_argument("url", help="URL to scrape")
@@ -36,22 +36,26 @@ def run():
     extract_parser.add_argument(
         "--field",
         action="append",
-        help="Field mapping: name=selector or name=selector@attr"
+        help="Field mapping: name=selector or name=selector@attr",
     )
 
-    extract_parser.add_argument("--format", default="text", choices=["text", "json", "csv"])
+    extract_parser.add_argument(
+        "--format",
+        default="text",
+        choices=["text", "json", "csv"],
+    )
     extract_parser.add_argument("--output", help="Output file")
 
-    # =========================
+    # ============================
     # GENERATE (auto config)
-    # =========================
+    # ============================
     generate_parser = subparsers.add_parser("generate")
     generate_parser.add_argument("url", help="URL to analyze")
     generate_parser.add_argument("--save", help="Save config to file")
 
-    # =========================
+    # ============================
     # PREVIEW (test selectors)
-    # =========================
+    # ============================
     preview_parser = subparsers.add_parser("preview")
 
     preview_parser.add_argument("url", help="URL to preview")
@@ -62,21 +66,20 @@ def run():
     preview_parser.add_argument(
         "--field",
         action="append",
-        help="Field mapping"
+        help="Field mapping",
     )
 
-    # =========================
+    # ============================
     # INTERACTIVE (selector picker)
-    # =========================
+    # ============================
     interactive_parser = subparsers.add_parser("interactive")
     interactive_parser.add_argument("url", help="URL to inspect")
 
-
     args = parser.parse_args()
 
-    # =========================
+    # ============================
     # SCRAPE MODE
-    # =========================
+    # ============================
     if args.command == "scrape":
         path = args.config
 
@@ -89,22 +92,8 @@ def run():
                 config_path = os.path.join(path, file)
                 config = load_config(config_path)
 
-                html = fetch_html(config["url"])
-
-                if "item" in config and "fields" in config:
-                    field_defs = [f"{k}={v}" for k, v in config["fields"].items()]
-                    data = extract_fields(
-                            html,
-                            config["item"],
-                            field_defs,
-                            config["url"]
-                            )
-                else:
-                    data = extract(
-                        html,
-                        config["selector"],
-                        config.get("attr", "text")
-                    )
+                # ✅ pipeline (handles pagination)
+                data = run_pipeline(config)
 
                 name = config.get("name", file.replace(".json", ""))
                 output_file = os.path.join("outputs", f"{name}.json")
@@ -115,31 +104,18 @@ def run():
 
         # single config
         config = load_config(path)
-        html = fetch_html(config["url"])
 
-        if "item" in config and "fields" in config:
-            field_defs = [f"{k}={v}" for k, v in config["fields"].items()]
-            data = extract_fields(
-                    html,
-                    config["item"],
-                    field_defs,
-                    config["url"]
-                    )
-        else:
-            data = extract(
-                html,
-                config["selector"],
-                config.get("attr", "text")
-            )
+        # ✅ pipeline
+        data = run_pipeline(config)
 
         name = config.get("name", "output")
         output_file = os.path.join("outputs", f"{name}.json")
 
         output(data, "json", output_file)
 
-    # =========================
+    # ============================
     # EXTRACT MODE
-    # =========================
+    # ============================
     elif args.command == "extract":
         if not args.item and not args.selector:
             parser.error("provide either --selector OR --item with --field")
@@ -148,19 +124,19 @@ def run():
 
         if args.item and args.field:
             data = extract_fields(
-                    html,
-                    args.item,
-                    args.field,
-                    args.url
-                    )
+                html,
+                args.item,
+                args.field,
+                args.url,  # base_url
+            )
         else:
             data = extract(html, args.selector, args.attr)
 
         output(data, args.format, args.output)
 
-    # =========================
+    # ============================
     # GENERATE MODE
-    # =========================
+    # ============================
     elif args.command == "generate":
         html = fetch_html(args.url)
         config = generate_config(args.url, html)
@@ -173,30 +149,29 @@ def run():
             with open(args.save, "w") as f:
                 json.dump(config, f, indent=2)
 
-            print(f"✓ saved to {args.save}")
+            print(f"✔ saved to {args.save}")
         else:
             print(json.dumps(config, indent=2))
 
-    # =========================
+    # ============================
     # PREVIEW MODE
-    # =========================
+    # ============================
     elif args.command == "preview":
         html = fetch_html(args.url)
 
         if args.item and args.field:
-            data = extract_fields(html, args.item, args.field)
+            data = extract_fields(html, args.item, args.field, args.url)
         else:
             if not args.selector:
                 parser.error("provide --selector or --item")
             data = extract(html, args.selector, args.attr)
 
         preview = data[:5] if isinstance(data, list) else data
-
         print(json.dumps(preview, indent=2))
 
-    # =========================
+    # ============================
     # INTERACTIVE MODE
-    # =========================
+    # ============================
     elif args.command == "interactive":
         html = fetch_html(args.url)
         interactive_mode(args.url, html)

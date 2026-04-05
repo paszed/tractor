@@ -93,7 +93,12 @@ def run():
 
                 if "item" in config and "fields" in config:
                     field_defs = [f"{k}={v}" for k, v in config["fields"].items()]
-                    data = extract_fields(html, config["item"], field_defs)
+                    data = extract_fields(
+                            html,
+                            config["item"],
+                            field_defs,
+                            config["url"]
+                            )
                 else:
                     data = extract(
                         html,
@@ -114,7 +119,12 @@ def run():
 
         if "item" in config and "fields" in config:
             field_defs = [f"{k}={v}" for k, v in config["fields"].items()]
-            data = extract_fields(html, config["item"], field_defs)
+            data = extract_fields(
+                    html,
+                    config["item"],
+                    field_defs,
+                    config["url"]
+                    )
         else:
             data = extract(
                 html,
@@ -137,7 +147,12 @@ def run():
         html = fetch_html(args.url)
 
         if args.item and args.field:
-            data = extract_fields(html, args.item, args.field)
+            data = extract_fields(
+                    html,
+                    args.item,
+                    args.field,
+                    args.url
+                    )
         else:
             data = extract(html, args.selector, args.attr)
 

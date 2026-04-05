@@ -1,35 +1,21 @@
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 import re
 
 
-# -------------------------
-# HELPERS
-# -------------------------
-
 def clean_text(text):
     if not text:
-        return ""
-
-    return (
-        text.strip()
-        .encode("latin1", errors="ignore")
-        .decode("utf-8", errors="ignore")
-    )
+        return None
+    return text.encode("utf-8", "ignore").decode("utf-8").strip()
 
 
 def parse_price(text):
-    text = clean_text(text)
+    if not text:
+        return None
+    # extract number like 51.77
+    match = re.search(r"(\d+\.\d+)", text)
+    return float(match.group(1)) if match else None
 
-    match = re.search(r"[\d]+(?:\.\d+)?", text)
-    if match:
-        return float(match.group())
-
-    return text
-
-
-# -------------------------
-# SIMPLE EXTRACT
-# -------------------------
 
 def extract(html, selector, attr="text"):
     soup = BeautifulSoup(html, "html.parser")
@@ -39,7 +25,8 @@ def extract(html, selector, attr="text"):
 
     for el in elements:
         if attr == "text":
-            value = clean_text(el.get_text(strip=True))
+            value = el.get_text(strip=True)
+            value = clean_text(value)
         else:
             value = el.get(attr)
 
@@ -48,11 +35,7 @@ def extract(html, selector, attr="text"):
     return results
 
 
-# -------------------------
-# STRUCTURED EXTRACT
-# -------------------------
-
-def extract_fields(html, item_selector, field_defs):
+def extract_fields(html, item_selector, field_defs, base_url=None):
     soup = BeautifulSoup(html, "html.parser")
     items = soup.select(item_selector)
 
@@ -62,7 +45,7 @@ def extract_fields(html, item_selector, field_defs):
         obj = {}
 
         for field in field_defs:
-            # parse "name=selector@attr"
+            # "name=selector@attr"
             name, expr = field.split("=", 1)
 
             if "@" in expr:
@@ -70,18 +53,24 @@ def extract_fields(html, item_selector, field_defs):
             else:
                 selector, attr = expr, "text"
 
-            el = item.select_one(selector.strip())
+            el = item.select_one(selector)
 
             if el:
                 if attr == "text":
-                    value = clean_text(el.get_text(strip=True))
+                    value = el.get_text(strip=True)
+                    value = clean_text(value)
                 else:
                     value = el.get(attr)
             else:
                 value = None
 
-            # 🔥 SPECIAL HANDLING: price
-            if name == "price" and value:
+            # normalize URLs
+            if name in ["link", "image"] and value and base_url:
+                value = urljoin(base_url, value)
+
+            # normalize price
+            if name == "price":
+
                 value = parse_price(value)
 
             obj[name] = value

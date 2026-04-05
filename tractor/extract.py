@@ -36,7 +36,7 @@ def extract(html, selector, attr="text"):
 
 
 def extract_fields(html, item_selector, field_defs, base_url=None):
-    soup = BeautifulSoup(html, "html.parser")
+    soup = html
     items = soup.select(item_selector)
 
     results = []

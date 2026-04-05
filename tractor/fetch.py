@@ -1,8 +1,7 @@
 import requests
-import urllib3
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from bs4 import BeautifulSoup
 
 def fetch_html(url):
-    response = requests.get(url, verify=False)
-    return response.text
+    res = requests.get(url)
+    res.raise_for_status()
+    return BeautifulSoup(res.text, "html.parser")

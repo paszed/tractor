@@ -1,6 +1,8 @@
 import argparse
 import os
 import json
+import sys
+import signal
 
 from tractor.fetch import fetch_html
 from tractor.extract import extract, extract_fields
@@ -11,111 +13,101 @@ from tractor.interactive import interactive_mode
 from tractor.pipeline import run_pipeline
 
 
-def run():
-    parser = argparse.ArgumentParser(description="Tractor - simple web scraper")
+def safe_print(data):
+    try:
+        print(json.dumps(data, indent=2))
+    except BrokenPipeError:
+        pass
 
+
+def run():
+    # fix broken pipe (important for piping to head/jq/etc)
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+    parser = argparse.ArgumentParser(description="tractor - simple web extraction tool")
     subparsers = parser.add_subparsers(dest="command")
 
-    # ============================
-    # SCRAPE (config mode)
-    # ============================
-    scrape_parser = subparsers.add_parser("scrape")
-    scrape_parser.add_argument("config", help="Path to config file or folder")
+    # =========================
+    # SCRAPE
+    # =========================
+    scrape = subparsers.add_parser("scrape")
+    scrape.add_argument("config")
+    scrape.add_argument("--output")
 
-    # ============================
-    # EXTRACT (manual mode)
-    # ============================
-    extract_parser = subparsers.add_parser("extract")
+    # =========================
+    # EXTRACT
+    # =========================
+    extract_cmd = subparsers.add_parser("extract")
+    extract_cmd.add_argument("url")
+    extract_cmd.add_argument("--selector")
+    extract_cmd.add_argument("--attr")
+    extract_cmd.add_argument("--item")
+    extract_cmd.add_argument("--field", action="append")
+    extract_cmd.add_argument("--format", default="json")
+    extract_cmd.add_argument("--output")
 
-    extract_parser.add_argument("url", help="URL to scrape")
+    # =========================
+    # GENERATE
+    # =========================
+    generate = subparsers.add_parser("generate")
+    generate.add_argument("url")
+    generate.add_argument("--save")
 
-    extract_parser.add_argument("--selector", help="CSS selector")
-    extract_parser.add_argument("--attr", default="text", help="Attribute to extract")
+    # =========================
+    # PREVIEW
+    # =========================
+    preview = subparsers.add_parser("preview")
+    preview.add_argument("url")
+    preview.add_argument("--selector")
+    preview.add_argument("--attr")
+    preview.add_argument("--item")
+    preview.add_argument("--field", action="append")
 
-    extract_parser.add_argument("--item", help="Selector for repeating items")
-    extract_parser.add_argument(
-        "--field",
-        action="append",
-        help="Field mapping: name=selector or name=selector@attr",
-    )
-
-    extract_parser.add_argument(
-        "--format",
-        default="text",
-        choices=["text", "json", "csv"],
-    )
-    extract_parser.add_argument("--output", help="Output file")
-
-    # ============================
-    # GENERATE (auto config)
-    # ============================
-    generate_parser = subparsers.add_parser("generate")
-    generate_parser.add_argument("url", help="URL to analyze")
-    generate_parser.add_argument("--save", help="Save config to file")
-
-    # ============================
-    # PREVIEW (test selectors)
-    # ============================
-    preview_parser = subparsers.add_parser("preview")
-
-    preview_parser.add_argument("url", help="URL to preview")
-    preview_parser.add_argument("--selector", help="CSS selector")
-    preview_parser.add_argument("--attr", default="text")
-
-    preview_parser.add_argument("--item", help="Selector for repeating items")
-    preview_parser.add_argument(
-        "--field",
-        action="append",
-        help="Field mapping",
-    )
-
-    # ============================
-    # INTERACTIVE (selector picker)
-    # ============================
-    interactive_parser = subparsers.add_parser("interactive")
-    interactive_parser.add_argument("url", help="URL to inspect")
+    # =========================
+    # INTERACTIVE
+    # =========================
+    interactive = subparsers.add_parser("interactive")
+    interactive.add_argument("url")
 
     args = parser.parse_args()
 
-    # ============================
+    # =========================
     # SCRAPE MODE
-    # ============================
+    # =========================
     if args.command == "scrape":
         path = args.config
 
+        # folder mode
         if os.path.isdir(path):
             files = [f for f in os.listdir(path) if f.endswith(".json")]
 
             for file in files:
-                print(f"→ Running {file}")
+                print(f"→ Running {file}", file=sys.stderr)
 
                 config_path = os.path.join(path, file)
                 config = load_config(config_path)
 
-                # ✅ pipeline (handles pagination)
                 data = run_pipeline(config)
 
-                name = config.get("name", file.replace(".json", ""))
-                output_file = os.path.join("outputs", f"{name}.json")
-
-                output(data, "json", output_file)
+                if args.output:
+                    output(data, "json", args.output)
+                else:
+                    safe_print(data)
 
             return
 
         # single config
         config = load_config(path)
-
-        # ✅ pipeline
         data = run_pipeline(config)
 
-        name = config.get("name", "output")
-        output_file = os.path.join("outputs", f"{name}.json")
+        if args.output:
+            output(data, "json", args.output)
+        else:
+            safe_print(data)
 
-        output(data, "json", output_file)
-
-    # ============================
+    # =========================
     # EXTRACT MODE
-    # ============================
+    # =========================
     elif args.command == "extract":
         if not args.item and not args.selector:
             parser.error("provide either --selector OR --item with --field")
@@ -123,20 +115,15 @@ def run():
         html = fetch_html(args.url)
 
         if args.item and args.field:
-            data = extract_fields(
-                html,
-                args.item,
-                args.field,
-                args.url,  # base_url
-            )
+            data = extract_fields(html, args.item, args.field, args.url)
         else:
             data = extract(html, args.selector, args.attr)
 
         output(data, args.format, args.output)
 
-    # ============================
+    # =========================
     # GENERATE MODE
-    # ============================
+    # =========================
     elif args.command == "generate":
         html = fetch_html(args.url)
         config = generate_config(args.url, html)
@@ -149,32 +136,35 @@ def run():
             with open(args.save, "w") as f:
                 json.dump(config, f, indent=2)
 
-            print(f"✔ saved to {args.save}")
+            print(f"✓ saved to {args.save}", file=sys.stderr)
         else:
-            print(json.dumps(config, indent=2))
+            safe_print(config)
 
-    # ============================
+    # =========================
     # PREVIEW MODE
-    # ============================
+    # =========================
     elif args.command == "preview":
         html = fetch_html(args.url)
 
         if args.item and args.field:
-            data = extract_fields(html, args.item, args.field, args.url)
+            data = extract_fields(html, args.item, args.field)
         else:
             if not args.selector:
                 parser.error("provide --selector or --item")
             data = extract(html, args.selector, args.attr)
 
-        preview = data[:5] if isinstance(data, list) else data
-        print(json.dumps(preview, indent=2))
+        preview_data = data[:5] if isinstance(data, list) else data
+        safe_print(preview_data)
 
-    # ============================
+    # =========================
     # INTERACTIVE MODE
-    # ============================
+    # =========================
     elif args.command == "interactive":
         html = fetch_html(args.url)
         interactive_mode(args.url, html)
 
     else:
         parser.print_help()
+
+  
+   

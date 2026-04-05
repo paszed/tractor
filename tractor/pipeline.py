@@ -1,3 +1,5 @@
+import sys
+
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -38,7 +40,8 @@ def run_pipeline(config):
     all_data = []
 
     while url:
-        print(f"→ Crawling {url}")
+        
+        print(f"→ Crawling {url}", file=sys.stderr)
 
         html = fetch_html(url)
 

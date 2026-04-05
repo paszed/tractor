@@ -1,5 +1,35 @@
 from bs4 import BeautifulSoup
+import re
 
+
+# -------------------------
+# HELPERS
+# -------------------------
+
+def clean_text(text):
+    if not text:
+        return ""
+
+    return (
+        text.strip()
+        .encode("latin1", errors="ignore")
+        .decode("utf-8", errors="ignore")
+    )
+
+
+def parse_price(text):
+    text = clean_text(text)
+
+    match = re.search(r"[\d]+(?:\.\d+)?", text)
+    if match:
+        return float(match.group())
+
+    return text
+
+
+# -------------------------
+# SIMPLE EXTRACT
+# -------------------------
 
 def extract(html, selector, attr="text"):
     soup = BeautifulSoup(html, "html.parser")
@@ -9,12 +39,18 @@ def extract(html, selector, attr="text"):
 
     for el in elements:
         if attr == "text":
-            results.append(el.get_text(strip=True))
+            value = clean_text(el.get_text(strip=True))
         else:
-            results.append(el.get(attr))
+            value = el.get(attr)
+
+        results.append(value)
 
     return results
 
+
+# -------------------------
+# STRUCTURED EXTRACT
+# -------------------------
 
 def extract_fields(html, item_selector, field_defs):
     soup = BeautifulSoup(html, "html.parser")
@@ -34,15 +70,19 @@ def extract_fields(html, item_selector, field_defs):
             else:
                 selector, attr = expr, "text"
 
-            el = item.select_one(selector)
+            el = item.select_one(selector.strip())
 
             if el:
                 if attr == "text":
-                    value = el.get_text(strip=True)
+                    value = clean_text(el.get_text(strip=True))
                 else:
                     value = el.get(attr)
             else:
                 value = None
+
+            # 🔥 SPECIAL HANDLING: price
+            if name == "price" and value:
+                value = parse_price(value)
 
             obj[name] = value
 

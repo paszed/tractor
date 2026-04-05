@@ -70,3 +70,29 @@ def run_generate(url):
 
     html = fetch_html(url)
     return generate_config(url, html)
+
+
+def run_pipeline_stream(config):
+    url = config["url"]
+
+    while url:
+        print(f"→ Crawling {url}", file=sys.stderr)
+
+        html = fetch_html(url)
+
+        # extract structured data
+        if "item" in config and "fields" in config:
+            field_defs = [f"{k}={v}" for k, v in config["fields"].items()]
+            data = extract_fields(html, config["item"], field_defs, url)
+        else:
+            data = []
+
+        for item in data:
+            yield item
+
+        # pagination
+        next_url = get_next_page(html, config, url)
+        if not next_url:
+            break
+
+        url = next_url

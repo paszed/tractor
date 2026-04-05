@@ -11,7 +11,7 @@ from tractor.config import load_config
 from tractor.generate import generate_config
 from tractor.interactive import interactive_mode
 from tractor.pipeline import run_pipeline
-
+from tractor.pipeline import run_pipeline, run_pipeline_stream
 
 def safe_print(data):
     try:
@@ -21,7 +21,6 @@ def safe_print(data):
 
 
 def run():
-    # fix broken pipe (important for piping to head/jq/etc)
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
     parser = argparse.ArgumentParser(description="tractor - simple web extraction tool")
@@ -33,6 +32,7 @@ def run():
     scrape = subparsers.add_parser("scrape")
     scrape.add_argument("config")
     scrape.add_argument("--output")
+    scrape.add_argument("--format", default="json")
 
     # =========================
     # EXTRACT
@@ -90,20 +90,43 @@ def run():
                 data = run_pipeline(config)
 
                 if args.output:
-                    output(data, "json", args.output)
+                    output(data, args.format, args.output)
                 else:
-                    safe_print(data)
+                    if args.format == "jsonl":
+                        try:
+                            for item in data:
+                                print(json.dumps(item))
+                        except BrokenPipeError:
+                            pass
+                    else:
+                        safe_print(data)
 
             return
 
         # single config
         config = load_config(path)
+        
+        if args.format == "jsonl" and not args.output:
+            try:
+                for item in run_pipeline_stream(config):
+                    print(json.dumps(item))
+            except BrokenPipeError:
+                pass
+            return
+
         data = run_pipeline(config)
 
         if args.output:
-            output(data, "json", args.output)
+            output(data, args.format, args.output)
         else:
-            safe_print(data)
+            if args.format == "jsonl":
+                try:
+                    for item in data:
+                        print(json.dumps(item))
+                except BrokenPipeError:
+                    pass
+            else:
+                safe_print(data)
 
     # =========================
     # EXTRACT MODE
@@ -165,6 +188,5 @@ def run():
 
     else:
         parser.print_help()
-
   
    

@@ -1,192 +1,63 @@
 import argparse
-import os
-import json
 import sys
-import signal
 
-from tractor.fetch import fetch_html
-from tractor.extract import extract, extract_fields
-from tractor.output import output
-from tractor.config import load_config
-from tractor.generate import generate_config
-from tractor.interactive import interactive_mode
-from tractor.pipeline import run_pipeline
-from tractor.pipeline import run_pipeline, run_pipeline_stream
+from tractor.commands.scrape import run_command as scrape_command
+from tractor.commands.preview import run_command as preview_command
+from tractor.commands.extract import run_command as extract_command
+from tractor.commands.interactive import run_command as interactive_command
 
-def safe_print(data):
-    try:
-        print(json.dumps(data, indent=2))
-    except BrokenPipeError:
-        pass
+from tractor.utils.errors import TractorError
 
 
-def run():
-    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-
-    parser = argparse.ArgumentParser(description="tractor - simple web extraction tool")
+def main():
+    parser = argparse.ArgumentParser(prog="tractor")
     subparsers = parser.add_subparsers(dest="command")
 
-    # =========================
-    # SCRAPE
-    # =========================
-    scrape = subparsers.add_parser("scrape")
-    scrape.add_argument("config")
-    scrape.add_argument("--output")
-    scrape.add_argument("--format", default="json")
+    # scrape
+    s = subparsers.add_parser("scrape")
+    s.add_argument("config")
+    s.add_argument(
+        "--format",
+        choices=["json", "jsonl"],
+        default="jsonl"
+    )
 
-    # =========================
-    # EXTRACT
-    # =========================
-    extract_cmd = subparsers.add_parser("extract")
-    extract_cmd.add_argument("url")
-    extract_cmd.add_argument("--selector")
-    extract_cmd.add_argument("--attr")
-    extract_cmd.add_argument("--item")
-    extract_cmd.add_argument("--field", action="append")
-    extract_cmd.add_argument("--format", default="json")
-    extract_cmd.add_argument("--output")
+    # preview
+    p = subparsers.add_parser("preview")
+    p.add_argument("config")
 
-    # =========================
-    # GENERATE
-    # =========================
-    generate = subparsers.add_parser("generate")
-    generate.add_argument("url")
-    generate.add_argument("--save")
+    # extract
+    e = subparsers.add_parser("extract")
+    e.add_argument("url")
+    e.add_argument("selector")
 
-    # =========================
-    # PREVIEW
-    # =========================
-    preview = subparsers.add_parser("preview")
-    preview.add_argument("url")
-    preview.add_argument("--selector")
-    preview.add_argument("--attr")
-    preview.add_argument("--item")
-    preview.add_argument("--field", action="append")
-
-    # =========================
-    # INTERACTIVE
-    # =========================
-    interactive = subparsers.add_parser("interactive")
-    interactive.add_argument("url")
+    # interactive
+    i = subparsers.add_parser("interactive")
+    i.add_argument("url")
 
     args = parser.parse_args()
 
-    # =========================
-    # SCRAPE MODE
-    # =========================
-    if args.command == "scrape":
-        path = args.config
+    try:
+        if args.command == "scrape":
+            scrape_command(args.config, format=args.format)
 
-        # folder mode
-        if os.path.isdir(path):
-            files = [f for f in os.listdir(path) if f.endswith(".json")]
+        elif args.command == "preview":
+            preview_command(args.config)
 
-            for file in files:
-                print(f"→ Running {file}", file=sys.stderr)
+        elif args.command == "extract":
+            extract_command(args.url, args.selector)
 
-                config_path = os.path.join(path, file)
-                config = load_config(config_path)
+        elif args.command == "interactive":
+            interactive_command(args.url)
 
-                data = run_pipeline(config)
-
-                if args.output:
-                    output(data, args.format, args.output)
-                else:
-                    if args.format == "jsonl":
-                        try:
-                            for item in data:
-                                print(json.dumps(item))
-                        except BrokenPipeError:
-                            pass
-                    else:
-                        safe_print(data)
-
-            return
-
-        # single config
-        config = load_config(path)
-        
-        if args.format == "jsonl" and not args.output:
-            try:
-                for item in run_pipeline_stream(config):
-                    print(json.dumps(item))
-            except BrokenPipeError:
-                pass
-            return
-
-        data = run_pipeline(config)
-
-        if args.output:
-            output(data, args.format, args.output)
         else:
-            if args.format == "jsonl":
-                try:
-                    for item in data:
-                        print(json.dumps(item))
-                except BrokenPipeError:
-                    pass
-            else:
-                safe_print(data)
+            parser.print_help()
+            sys.exit(1)
 
-    # =========================
-    # EXTRACT MODE
-    # =========================
-    elif args.command == "extract":
-        if not args.item and not args.selector:
-            parser.error("provide either --selector OR --item with --field")
+    except TractorError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
-        html = fetch_html(args.url)
 
-        if args.item and args.field:
-            data = extract_fields(html, args.item, args.field, args.url)
-        else:
-            data = extract(html, args.selector, args.attr)
-
-        output(data, args.format, args.output)
-
-    # =========================
-    # GENERATE MODE
-    # =========================
-    elif args.command == "generate":
-        html = fetch_html(args.url)
-        config = generate_config(args.url, html)
-
-        if args.save:
-            dir_path = os.path.dirname(args.save)
-            if dir_path:
-                os.makedirs(dir_path, exist_ok=True)
-
-            with open(args.save, "w") as f:
-                json.dump(config, f, indent=2)
-
-            print(f"✓ saved to {args.save}", file=sys.stderr)
-        else:
-            safe_print(config)
-
-    # =========================
-    # PREVIEW MODE
-    # =========================
-    elif args.command == "preview":
-        html = fetch_html(args.url)
-
-        if args.item and args.field:
-            data = extract_fields(html, args.item, args.field)
-        else:
-            if not args.selector:
-                parser.error("provide --selector or --item")
-            data = extract(html, args.selector, args.attr)
-
-        preview_data = data[:5] if isinstance(data, list) else data
-        safe_print(preview_data)
-
-    # =========================
-    # INTERACTIVE MODE
-    # =========================
-    elif args.command == "interactive":
-        html = fetch_html(args.url)
-        interactive_mode(args.url, html)
-
-    else:
-        parser.print_help()
-  
-   
+if __name__ == "__main__":
+    main()
